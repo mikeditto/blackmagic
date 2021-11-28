@@ -35,6 +35,9 @@
 #include "command.h"
 #include "crc32.h"
 #include "morse.h"
+#ifdef ENABLE_RTT
+#include "rtt.h"
+#endif
 
 enum gdb_signal {
 	GDB_SIGINT = 2,
@@ -208,8 +211,12 @@ int gdb_main_loop(struct target_controller *tc, bool in_syscall)
 			/* Wait for target halt */
 			while(!(reason = target_halt_poll(cur_target, &watch))) {
 				char c = (char)gdb_if_getchar_to(0);
-				if(c == '\x03' || c == '\x04')
+				if(c == '\x03' || c == '\x04') {
 					target_halt_request(cur_target);
+				}
+				#ifdef ENABLE_RTT
+				if (rtt_enabled) poll_rtt(cur_target);
+				#endif
 			}
 			SET_RUN_STATE(0);
 
@@ -580,6 +587,10 @@ static void handle_v_packet(char *packet, const size_t plen)
 			}
 			break;
 		}
+		#ifdef ENABLE_RTT
+		/* force searching rtt control block */
+		rtt_found = false;
+		#endif
 		/* Run target program. For us (embedded) this means reset. */
 		if (cur_target) {
 			target_set_cmdline(cur_target, cmdline);
