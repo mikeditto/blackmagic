@@ -354,9 +354,7 @@ static void samd_add_flash(target *t, uint32_t addr, size_t length)
 	f->length = length;
 	f->blocksize = SAMD_ROW_SIZE;
 	f->erase = samd_flash_erase;
-	f->write = target_flash_write_buffered;
-	f->done = target_flash_done_buffered;
-	f->write_buf = samd_flash_write;
+	f->write = samd_flash_write;
 	f->buf_size = SAMD_PAGE_SIZE;
 	target_add_flash(t, f);
 }
@@ -744,4 +742,3 @@ static bool samd_cmd_ssb(target *t)
 
 	return true;
 }
-
