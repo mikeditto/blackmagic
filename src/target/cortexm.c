@@ -31,6 +31,7 @@
 #include "target.h"
 #include "target_internal.h"
 #include "cortexm.h"
+#include "platform.h"
 
 #include <unistd.h>
 
@@ -239,17 +240,10 @@ static void cortexm_priv_free(void *priv)
 
 static bool cortexm_forced_halt(target *t)
 {
-	uint32_t start_time = platform_time_ms();
+	target_halt_request(t);
 	platform_srst_set_val(false);
-	/* Wait until SRST is released.*/
-	while (platform_time_ms() < start_time + 2000) {
-		if (!platform_srst_get_val())
-			break;
-	}
-	if (platform_srst_get_val())
-		return false;
 	uint32_t dhcsr = 0;
-	start_time = platform_time_ms();
+	uint32_t start_time = platform_time_ms();
 	/* Try hard to halt the target. STM32F7 in  WFI
 	   needs multiple writes!*/
 	while (platform_time_ms() < start_time + cortexm_wait_timeout) {
@@ -323,7 +317,11 @@ bool cortexm_probe(ADIv5_AP_t *ap, bool forced)
 		target_check_error(t);
 	}
 
-	if (forced)
+	/* Only force halt if read ROM Table failed and there is no DPv2
+	 * targetid!
+	 * So long, only STM32L0 is expected to enter this cause.
+	 */
+	if (forced && !ap->dp->targetid)
 		if (!cortexm_forced_halt(t))
 			return false;
 
@@ -536,6 +534,11 @@ static void cortexm_reset(target *t)
 
 	/* Reset DFSR flags */
 	target_mem_write32(t, CORTEXM_DFSR, CORTEXM_DFSR_RESETALL);
+
+	/* 1ms delay to ensure that things such as the stm32f1 HSI clock have started
+	 * up fully.
+	 */
+	platform_delay(1);
 }
 
 static void cortexm_halt_request(target *t)
