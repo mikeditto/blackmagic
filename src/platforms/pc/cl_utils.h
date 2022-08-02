@@ -27,6 +27,8 @@
 enum bmp_cl_mode {
 	BMP_MODE_DEBUG,
 	BMP_MODE_TEST,
+	BMP_MODE_RESET,
+	BMP_MODE_FLASH_ERASE,
 	BMP_MODE_FLASH_WRITE,
 	BMP_MODE_FLASH_READ,
 	BMP_MODE_FLASH_VERIFY
@@ -36,6 +38,8 @@ typedef struct BMP_CL_OPTIONS_s {
 	enum bmp_cl_mode opt_mode;
 	bool opt_usejtag;
 	bool opt_no_wait;
+	bool opt_tpwr;
+	bool opt_connect_under_reset;
 	char *opt_flash_file;
 	char *opt_serial;
 	char *opt_cable;
