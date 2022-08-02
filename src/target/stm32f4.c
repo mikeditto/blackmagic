@@ -37,10 +37,12 @@
 
 static bool stm32f4_cmd_erase_mass(target *t);
 static bool stm32f4_cmd_option(target *t, int argc, char *argv[]);
+static bool stm32f4_cmd_psize(target *t, int argc, char *argv[]);
 
 const struct command_s stm32f4_cmd_list[] = {
 	{"erase_mass", (cmd_handler)stm32f4_cmd_erase_mass, "Erase entire flash memory"},
 	{"option", (cmd_handler)stm32f4_cmd_option, "Manipulate option bytes"},
+	{"psize", (cmd_handler)stm32f4_cmd_psize, "Configure flash write parallelism: (x8|x32)"},
 	{NULL, NULL, NULL}
 };
 
@@ -122,6 +124,7 @@ static const uint16_t stm32f4_flash_write_x8_stub[] = {
 struct stm32f4_flash {
 	struct target_flash f;
 	uint8_t base_sector;
+	uint8_t psize;
 };
 
 enum ID_STM32F47 {
@@ -155,6 +158,7 @@ static void stm32f4_add_flash(target *t,
 	f->align = 4;
 	f->erased = 0xff;
 	sf->base_sector = base_sector;
+	sf->psize = 32;
 	target_add_flash(t, f);
 }
 
@@ -180,6 +184,7 @@ bool stm32f4_probe(target *t)
 
 	switch(idcode) {
 	case ID_STM32F42X: /* 427/437 */
+	case ID_STM32F46X: /* 469/479 */
 		/* Second bank for 2M parts. */
 		stm32f4_add_flash(t, 0x8100000, 0x10000, 0x4000, 12);
 		stm32f4_add_flash(t, 0x8110000, 0x10000, 0x10000, 16);
@@ -223,7 +228,7 @@ bool stm32f4_probe(target *t)
 		stm32f4_add_flash(t, 0x0200000, 0x20000, 0x8000, 0);
 		stm32f4_add_flash(t, 0x0220000, 0x20000, 0x20000, 4);
 		stm32f4_add_flash(t, 0x0240000, 0xC0000, 0x40000, 5);
-		target_add_commands(t, stm32f4_cmd_list, "STM32F4x");
+		target_add_commands(t, stm32f4_cmd_list, "STM32F74x");
 		break;
 	case ID_STM32F76X: /* F76x F77x RM0410 */
 		t->driver = stm32f7_driver_str;
@@ -246,7 +251,7 @@ bool stm32f4_probe(target *t)
 		stm32f4_add_flash(t, 0x8000000, 0x010000, 0x4000,  0);
 		stm32f4_add_flash(t, 0x8010000, 0x010000, 0x10000, 4);
 		stm32f4_add_flash(t, 0x8020000, 0x060000, 0x20000, 3);
-		target_add_commands(t, stm32f4_cmd_list, "STM32F76x");
+		target_add_commands(t, stm32f4_cmd_list, "STM32F72x");
 		break;
 	default:
 		return false;
@@ -308,8 +313,12 @@ static int stm32f4_flash_write(struct target_flash *f,
 	}
 
 	/* Write buffer to target ram call stub */
-	target_mem_write(f->t, SRAM_BASE, stm32f4_flash_write_x8_stub,
-	                 sizeof(stm32f4_flash_write_x8_stub));
+	if (((struct stm32f4_flash *)f)->psize == 32)
+		target_mem_write(f->t, SRAM_BASE, stm32f4_flash_write_x32_stub,
+		                 sizeof(stm32f4_flash_write_x32_stub));
+	else
+		target_mem_write(f->t, SRAM_BASE, stm32f4_flash_write_x8_stub,
+		                 sizeof(stm32f4_flash_write_x8_stub));
 	target_mem_write(f->t, STUB_BUFFER_BASE, src, len);
 	return cortexm_run_stub(f->t, SRAM_BASE, dest,
 	                        STUB_BUFFER_BASE, len, 0);
@@ -538,5 +547,35 @@ static bool stm32f4_cmd_option(target *t, int argc, char *argv[])
 	if (readcount > 2)
 		tc_printf(t, "OPTCR2: 0x%08X" , val[2]);
 	tc_printf(t, "\n");
+	return true;
+}
+
+static bool stm32f4_cmd_psize(target *t, int argc, char *argv[])
+{
+	if (argc == 1) {
+		uint8_t psize = 8;
+		for (struct target_flash *f = t->flash; f; f = f->next) {
+			if (f->write == stm32f4_flash_write) {
+				psize = ((struct stm32f4_flash *)f)->psize;
+			}
+		}
+		tc_printf(t, "Flash write parallelism: %s\n",
+		          psize == 32 ? "x32" : "x8");
+	} else {
+		uint8_t psize;
+		if (!strcmp(argv[1], "x8")) {
+			psize = 8;
+		} else if (!strcmp(argv[1], "x32")) {
+			psize = 32;
+		} else {
+			tc_printf(t, "usage: monitor psize (x8|x32)\n");
+			return false;
+		}
+		for (struct target_flash *f = t->flash; f; f = f->next) {
+			if (f->write == stm32f4_flash_write) {
+				((struct stm32f4_flash *)f)->psize = psize;
+			}
+		}
+	}
 	return true;
 }
