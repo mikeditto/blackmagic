@@ -88,7 +88,11 @@ const struct command_s cmd_list[] = {
 	{"tpwr", (cmd_handler)cmd_target_power, "Supplies power to the target: (enable|disable)"},
 #endif
 #ifdef PLATFORM_HAS_TRACESWO
-	{"traceswo", (cmd_handler)cmd_traceswo, "Start trace capture [(baudrate) for async swo]" },
+#if defined TRACESWO_PROTOCOL && TRACESWO_PROTOCOL == 2
+	{"traceswo", (cmd_handler)cmd_traceswo, "Start trace capture, NRZ mode: (baudrate)" },
+#else
+	{"traceswo", (cmd_handler)cmd_traceswo, "Start trace capture, Manchester mode" },
+#endif
 #endif
 #if defined(PLATFORM_HAS_DEBUG) && !defined(PC_HOSTED)
 	{"debug_bmp", (cmd_handler)cmd_debug_bmp, "Output BMP \"debug\" strings to the second vcom: (enable|disable)"},
@@ -112,8 +116,9 @@ long cortexm_wait_timeout = 2000; /* Timeout to wait for Cortex to react on halt
 int command_process(target *t, char *cmd)
 {
 	const struct command_s *c;
-	int argc = 0;
+	int argc = 1;
 	const char **argv;
+	const char *part;
 
 	/* Initial estimate for argc */
 	for(char *s = cmd; *s; s++)
@@ -122,8 +127,9 @@ int command_process(target *t, char *cmd)
 	argv = alloca(sizeof(const char *) * argc);
 
 	/* Tokenize cmd to find argv */
-	for(argc = 0, argv[argc] = strtok(cmd, " \t");
-		argv[argc]; argv[++argc] = strtok(NULL, " \t"));
+	argc = 0;
+	for (part = strtok(cmd, " \t"); part; part = strtok(NULL, " \t"))
+		argv[argc++] = part;
 
 	/* Look for match and call handler */
 	for(c = cmd_list; c->cmd; c++) {
@@ -372,13 +378,21 @@ static bool cmd_traceswo(target *t, int argc, const char **argv)
 #else
 	extern char serial_no[9];
 #endif
-	uint32_t baudrate = 0;
 	(void)t;
-
-	if (argc > 1)
-		baudrate = atoi(argv[1]);
-
-	traceswo_init(baudrate);
+#if defined TRACESWO_PROTOCOL && TRACESWO_PROTOCOL == 2
+	if (argc > 1) {
+		uint32_t baudrate = atoi(argv[1]);
+		traceswo_init(baudrate);
+	} else {
+		gdb_outf("Missing baudrate parameter in command\n");
+	}
+#else
+	(void)argv;
+	traceswo_init();
+	if (argc > 1) {
+		gdb_outf("Superfluous parameter(s) ignored\n");
+	}
+#endif
 	gdb_outf("%s:%02X:%02X\n", serial_no, 5, 0x85);
 	return true;
 }
