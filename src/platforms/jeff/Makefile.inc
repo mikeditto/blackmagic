@@ -3,6 +3,7 @@ CC = $(CROSS_COMPILE)gcc
 OBJCOPY = $(CROSS_COMPILE)objcopy
 
 NO_OWN_LL = 1
+OPT_FLAGS := -Os
 
 ifeq ($(ENABLE_DEBUG), 1)
 CFLAGS += -DDEBUG_ME
