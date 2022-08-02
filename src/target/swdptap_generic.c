@@ -101,8 +101,7 @@ swdptap_seq_in(int ticks)
 	return ret;
 }
 
-bool __attribute__((weak))
-swdptap_seq_in_parity(uint32_t *ret, int ticks)
+bool swdptap_seq_in_parity(uint32_t *ret, int ticks)
 {
 	uint32_t index = 1;
 	uint8_t parity = 0;
@@ -123,8 +122,7 @@ swdptap_seq_in_parity(uint32_t *ret, int ticks)
 	return parity;
 }
 
-void __attribute__((weak))
-swdptap_seq_out(uint32_t MS, int ticks)
+void swdptap_seq_out(uint32_t MS, int ticks)
 {
 	swdptap_set_out();
 
@@ -134,8 +132,7 @@ swdptap_seq_out(uint32_t MS, int ticks)
 	}
 }
 
-void __attribute__((weak))
-swdptap_seq_out_parity(uint32_t MS, int ticks)
+void swdptap_seq_out_parity(uint32_t MS, int ticks)
 {
 	uint8_t parity = 0;
 
