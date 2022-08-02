@@ -314,6 +314,7 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 	PROBE(lmi_probe);
 	PROBE(kinetis_probe);
 	PROBE(efm32_probe);
+	PROBE(msp432_probe);
 #undef PROBE
 
 	return true;
@@ -456,6 +457,14 @@ static void cortexm_regs_write(target *t, const void *data)
 			                    ADIV5_AP_DB(DB_DCRSR),
 			                    0x10000 | regnum_cortex_mf[i]);
 		}
+}
+
+int cortexm_mem_write_sized(
+	target *t, target_addr dest, const void *src, size_t len, enum align align)
+{
+	cortexm_cache_clean(t, dest, len, true);
+	adiv5_mem_write_sized(cortexm_ap(t), dest, src, len, align);
+	return target_check_error(t);
 }
 
 static uint32_t cortexm_pc_read(target *t)
