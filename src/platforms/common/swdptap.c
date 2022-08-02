@@ -18,7 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* This file implements the low-level SW-DP interface. */
+/* This file implements the SW-DP interface. */
 
 #include "general.h"
 #include "swdptap.h"
