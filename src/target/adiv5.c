@@ -246,6 +246,23 @@ static uint32_t adiv5_mem_read32(ADIv5_AP_t *ap, uint32_t addr)
 	return ret;
 }
 
+static uint32_t adiv5_ap_read_id(ADIv5_AP_t *ap, uint32_t addr)
+{
+	uint32_t res = 0;
+	for (int i = 0; i < 4; i++) {
+		uint32_t x = adiv5_mem_read32(ap, addr + 4 * i);
+		res |= (x & 0xff) << (i * 8);
+	}
+	return res;
+}
+
+uint64_t adiv5_ap_read_pidr(ADIv5_AP_t *ap, uint32_t addr)
+{
+	uint64_t pidr = adiv5_ap_read_id(ap, addr + PIDR4_OFFSET);
+	pidr = pidr << 32 |     adiv5_ap_read_id(ap, addr + PIDR0_OFFSET);
+	return pidr;
+}
+
 static void adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr)
 {
 	addr &= ~3;
