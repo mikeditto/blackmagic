@@ -440,6 +440,7 @@ static int stlink_usb_error_check(uint8_t *data, bool verbose)
 		case STLINK_SWD_DP_ERROR:
 			if (verbose)
 				DEBUG("STLINK_SWD_DP_ERROR\n");
+			raise_exception(EXCEPTION_ERROR, "STLINK_SWD_DP_ERROR");
 			return STLINK_ERROR_FAIL;
 		case STLINK_SWD_DP_PARITY_ERROR:
 			if (verbose)
@@ -487,7 +488,7 @@ static int send_recv_retry(uint8_t *txbuf, size_t txsize,
 		gettimeofday(&now, NULL);
 		timersub(&now, &start, &diff);
 		if ((diff.tv_sec >= 1) || (res != STLINK_ERROR_WAIT)) {
-			DEBUG_STLINK("Failed: ");
+			DEBUG("write_retry failed");
 			return res;
 		}
 	}
@@ -510,7 +511,7 @@ static int read_retry(uint8_t *txbuf, size_t txsize,
 		gettimeofday(&now, NULL);
 		timersub(&now, &start, &diff);
 		if ((diff.tv_sec >= 1) || (res != STLINK_ERROR_WAIT)) {
-			DEBUG_STLINK("Failed: ");
+			DEBUG("read_retry failed");
 			return res;
 		}
 	}
@@ -534,7 +535,6 @@ static int write_retry(uint8_t *cmdbuf, size_t cmdsize,
 		gettimeofday(&now, NULL);
 		timersub(&now, &start, &diff);
 		if ((diff.tv_sec >= 1) || (res != STLINK_ERROR_WAIT)) {
-			DEBUG_STLINK("failed");
 			return res;
 		}
 	}
@@ -683,7 +683,7 @@ void stlink_init(int argc, char **argv)
 		goto error;
 	}
 	int i = 0;
-	bool multiple_devices = false;
+	int nr_stlinks = 0;
 	while ((dev = devs[i++]) != NULL) {
 		struct libusb_device_descriptor desc;
 		int r = libusb_get_device_descriptor(dev, &desc);
@@ -698,10 +698,6 @@ void stlink_init(int argc, char **argv)
 			if (desc.idProduct == PRODUCT_ID_STLINKV1)  { /* Reject V1 devices.*/
 				DEBUG("STLINKV1 not supported\n");
 				continue;
-			}
-			if (Stlink.handle) {
-				libusb_close(Stlink.handle);
-				multiple_devices = (serial)? false : true;
 			}
 			r = libusb_open(dev, &Stlink.handle);
 			if (r == LIBUSB_SUCCESS) {
@@ -736,44 +732,50 @@ void stlink_init(int argc, char **argv)
 				}
 				if (serial && (!strncmp(Stlink.serial, serial, strlen(serial))))
 					DEBUG("Found ");
-				if (!serial || (!strncmp(Stlink.serial, serial, strlen(serial)))) {
-					if (desc.idProduct == PRODUCT_ID_STLINKV2) {
-						DEBUG("STLINKV20 serial %s\n", Stlink.serial);
-						Stlink.ver_hw = 20;
-						Stlink.ep_tx = 2;
-					} else if (desc.idProduct == PRODUCT_ID_STLINKV21) {
-						DEBUG("STLINKV21 serial %s\n", Stlink.serial);
-						Stlink.ver_hw = 21;
-						Stlink.ep_tx = 1;
-					} else if (desc.idProduct == PRODUCT_ID_STLINKV21_MSD) {
-						DEBUG("STLINKV21_MSD serial %s\n", Stlink.serial);
-						Stlink.ver_hw = 21;
-						Stlink.ep_tx = 1;
-					} else if (desc.idProduct == PRODUCT_ID_STLINKV3E) {
-						DEBUG("STLINKV3E serial %s\n", Stlink.serial);
-						Stlink.ver_hw = 30;
-						Stlink.ep_tx = 1;
-					} else if (desc.idProduct == PRODUCT_ID_STLINKV3) {
-						DEBUG("STLINKV3  serial %s\n", Stlink.serial);
-						Stlink.ver_hw = 30;
-						Stlink.ep_tx = 1;
+				if (desc.idProduct == PRODUCT_ID_STLINKV2) {
+					DEBUG("STLINKV20 serial %s\n", Stlink.serial);
+					Stlink.ver_hw = 20;
+					Stlink.ep_tx = 2;
+				} else if (desc.idProduct == PRODUCT_ID_STLINKV21) {
+					DEBUG("STLINKV21 serial %s\n", Stlink.serial);
+					Stlink.ver_hw = 21;
+					Stlink.ep_tx = 1;
+				} else if (desc.idProduct == PRODUCT_ID_STLINKV21_MSD) {
+					DEBUG("STLINKV21_MSD serial %s\n", Stlink.serial);
+					Stlink.ver_hw = 21;
+					Stlink.ep_tx = 1;
+				} else if (desc.idProduct == PRODUCT_ID_STLINKV3E) {
+					DEBUG("STLINKV3E serial %s\n", Stlink.serial);
+					Stlink.ver_hw = 30;
+					Stlink.ep_tx = 1;
+				} else if (desc.idProduct == PRODUCT_ID_STLINKV3) {
+					DEBUG("STLINKV3  serial %s\n", Stlink.serial);
+					Stlink.ver_hw = 30;
+					Stlink.ep_tx = 1;
+				} else {
+					DEBUG("Unknown STLINK variant, serial %s\n", Stlink.serial);
+				}
+				nr_stlinks++;
+				if (serial) {
+					if (!strncmp(Stlink.serial, serial, strlen(serial))) {
+						break;
 					} else {
-						DEBUG("Unknown STLINK variant, serial %s\n", Stlink.serial);
+						libusb_close(Stlink.handle);
+						Stlink.handle = 0;
 					}
 				}
-				if (serial && (!strncmp(Stlink.serial, serial, strlen(serial))))
-					break;
 			} else {
 				DEBUG("Open failed %s\n", libusb_strerror(r));
 			}
 		}
 	}
-	if (multiple_devices) {
-		DEBUG("Multiple Stlinks. Please specify serial number\n");
-		goto error_1;
-	}
 	if (!Stlink.handle) {
-		DEBUG("No Stlink device found!\n");
+		if (nr_stlinks && serial)
+			DEBUG("No Stlink with given serial number %s\n", serial);
+		else if (nr_stlinks > 1)
+			DEBUG("Multiple Stlinks. Please specify serial number\n");
+		else
+			DEBUG("No Stlink device found!\n");
 		goto error;
 	}
 	int config;
@@ -898,14 +900,8 @@ int stlink_enter_debug_swd(void)
 					  STLINK_DEBUG_ENTER_SWD_NO_RESET};
 	uint8_t data[2];
 	DEBUG("Enter SWD\n");
-	if (send_recv_retry(cmd, 16, data, 2) != STLINK_ERROR_OK)
-		return -1;
-	uint8_t cmd1[16] = {STLINK_DEBUG_COMMAND,
-						STLINK_DEBUG_READCOREID};
-	uint8_t data1[4];
-	send_recv(cmd1, 16, data1, 4);
-	stlink_usb_error_check(data, false);
-	return 0;
+	send_recv(cmd, 16, data, 2);
+	return stlink_usb_error_check(data, true);
 }
 
 int stlink_enter_debug_jtag(void)
@@ -1077,8 +1073,7 @@ bool adiv5_ap_setup(int ap)
 	uint8_t data[2];
 	send_recv_retry(cmd, 16, data, 2);
 	DEBUG_STLINK("Open AP %d\n", ap);
-	stlink_usb_error_check(data, true);
-	return true;
+	return (stlink_usb_error_check(data, true))? false: true;
 }
 
 void adiv5_ap_cleanup(int ap)
