@@ -134,7 +134,6 @@ typedef struct ADIv5_DP_s {
 	int refcnt;
 
 	uint32_t idcode;
-	uint32_t dp_idcode; /* Contains DPvX revision*/
 	uint32_t targetid;  /* Contains IDCODE for DPv2 devices.*/
 
 	uint32_t (*dp_read)(struct ADIv5_DP_s *dp, uint16_t addr);
@@ -177,7 +176,6 @@ typedef struct ADIv5_AP_s {
 	uint8_t apsel;
 
 	uint32_t idr;
-	uint32_t cfg;
 	uint32_t base;
 	uint32_t csw;
 } ADIv5_AP_t;
