@@ -120,12 +120,13 @@ static void cl_help(char **argv, BMP_CL_OPTIONS_t *opt)
 	printf("\t-h\t\t: This help.\n");
 	printf("\t-v[1|2]\t\t: Increasing verbosity\n");
 	printf("\t-d \"path\"\t: Use serial device at \"path\"\n");
+	printf("\t-P <num>\t: Use device found as <num>");
 	printf("\t-s \"string\"\t: Use dongle with (partial) "
 		  "serial number \"string\"\n");
 	printf("\t-c \"string\"\t: Use ftdi dongle with type \"string\"\n");
-	printf("\t-C\t\t: Connect under reset\n");
 	printf("\t-n\t\t: Exit immediate if no device found\n");
 	printf("\tRun mode related options:\n");
+	printf("\t-C\t\t: Connect under reset\n");
 	printf("\t-t\t\t: Scan SWD, with no target found scan jtag and exit\n");
 	printf("\t-E\t\t: Erase flash until flash end or for given size\n");
 	printf("\t-V\t\t: Verify flash against binary file\n");
@@ -149,7 +150,7 @@ void cl_init(BMP_CL_OPTIONS_t *opt, int argc, char **argv)
 	opt->opt_target_dev = 1;
 	opt->opt_flash_start = 0x08000000;
 	opt->opt_flash_size = 16 * 1024 *1024;
-	while((c = getopt(argc, argv, "Ehv::d:s:c:CnN:tVta:S:jprR")) != -1) {
+	while((c = getopt(argc, argv, "Ehv::d:s:I:c:CnN:tVta:S:jpP:rR")) != -1) {
 		switch(c) {
 		case 'c':
 			if (optarg)
@@ -181,6 +182,10 @@ void cl_init(BMP_CL_OPTIONS_t *opt, int argc, char **argv)
 			if (optarg)
 				opt->opt_serial = optarg;
 			break;
+		case 'I':
+			if (optarg)
+				opt->opt_ident_string = optarg;
+			break;
 		case 'E':
 			opt->opt_mode = BMP_MODE_FLASH_ERASE;
 			break;
@@ -206,6 +211,10 @@ void cl_init(BMP_CL_OPTIONS_t *opt, int argc, char **argv)
 		case 'N':
 			if (optarg)
 				opt->opt_target_dev = strtol(optarg, NULL, 0);
+			break;
+		case 'P':
+			if (optarg)
+				opt->opt_position = atoi(optarg);
 			break;
 		case 'S':
 			if (optarg) {
@@ -276,8 +285,6 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 	} else {
 		target_foreach(display_target, NULL);
 	}
-	if (opt->opt_mode == BMP_MODE_TEST)
-			return 0;
 	if (opt->opt_target_dev > num_targets) {
 		DEBUG("Given target nummer %d not available\n", opt->opt_target_dev);
 		return res;
@@ -285,6 +292,44 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 	target *t = target_attach_n(opt->opt_target_dev, NULL);
 	if (!t) {
 		DEBUG("Can not attach to target %d\n", opt->opt_target_dev);
+		goto target_detach;
+	}
+	if (opt->opt_mode == BMP_MODE_TEST) {
+		char map [1024], *p = map;
+		if (target_mem_map(t, map, sizeof(map))) {
+			while (*p && (*p == '<')) {
+				unsigned int start, size;
+				char *res;
+				int match;
+				match = strncmp(p, "<memory-map>", strlen("<memory-map>"));
+				if (!match) {
+					p  += strlen("<memory-map>");
+					continue;
+				}
+				match = strncmp(p, "<memory type=\"flash\" ", strlen("<memory type=\"flash\" "));
+				if (!match) {
+					unsigned int blocksize;
+					if (sscanf(p, "<memory type=\"flash\" start=\"%x\" length=\"%x\">"
+							  "<property name=\"blocksize\">%x</property></memory>",
+							  &start, &size, &blocksize))
+						printf("Flash Start: 0x%08x, length %#9x, blocksize %#8x\n",
+							   start, size, blocksize);
+					res = strstr(p, "</memory>");
+					p = res + strlen("</memory>");
+					continue;
+				}
+				match = strncmp(p, "<memory type=\"ram\" ", strlen("<memory type=\"ram\" "));
+				if (!match) {
+					if (sscanf(p, "<memory type=\"ram\" start=\"%x\" length=\"%x\"/",
+							   &start, &size))
+						printf("Ram   Start: 0x%08x, length %#9x\n", start, size);
+					res = strstr(p, "/>");
+					p = res + strlen("/>");
+					continue;
+				}
+				break;
+			}
+		}
 		goto target_detach;
 	}
 	int read_file = -1;
@@ -297,7 +342,7 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 		}
 	} else if (opt->opt_mode == BMP_MODE_FLASH_READ) {
 		/* Open as binary */
-		read_file = open(opt->opt_flash_file, O_CREAT | O_RDWR | O_BINARY,
+		read_file = open(opt->opt_flash_file, O_TRUNC | O_CREAT | O_RDWR | O_BINARY,
 						 S_IRUSR | S_IWUSR);
 		if (read_file == -1) {
 			printf("Error opening flashfile %s for read: %s\n",
@@ -323,6 +368,7 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 	} else if (opt->opt_mode == BMP_MODE_FLASH_WRITE) {
 		DEBUG("Erase    %zu bytes at 0x%08" PRIx32 "\n", map.size,
 			  opt->opt_flash_start);
+		uint32_t start_time = platform_time_ms();
 		unsigned int erased = target_flash_erase(t, opt->opt_flash_start,
 												 map.size);
 		if (erased) {
@@ -343,9 +389,12 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 		}
 		target_flash_done(t);
 		target_reset(t);
+		uint32_t end_time = platform_time_ms();
+		printf("Flash Write succeeded for %d bytes, %8.3f kiB/s\n",
+			   (int)map.size, (((map.size * 1.0)/(end_time - start_time))));
 	} else {
 #define WORKSIZE 1024
-		uint8_t *data = malloc(WORKSIZE);
+		uint8_t *data = alloca(WORKSIZE);
 		if (!data) {
 			printf("Can not malloc memory for flash read/verify operation\n");
 			return res;
@@ -359,6 +408,7 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 			map.size;
 		int bytes_read = 0;
 		void *flash = map.data;
+		uint32_t start_time = platform_time_ms();
 		while (size) {
 			int worksize = (size > WORKSIZE) ? WORKSIZE : size;
 			int n_read = target_mem_read(t, data, flash_src, worksize);
@@ -396,9 +446,11 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 			if (size <= 0)
 				res = 0;
 		}
+		uint32_t end_time = platform_time_ms();
 		if (read_file != -1)
 			close(read_file);
-		printf("Read/Verifed succeeded for %d bytes\n", bytes_read);
+		printf("Read/Verified succeeded for %d bytes, %8.3f kiB/s\n",
+			   bytes_read, (((bytes_read * 1.0)/(end_time - start_time))));
 	}
   free_map:
 	if (map.size)
