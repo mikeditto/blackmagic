@@ -58,8 +58,8 @@ static const struct usb_device_descriptor dev = {
 	.bDeviceClass = 0xEF,		/* Miscellaneous Device */
 	.bDeviceSubClass = 2,		/* Common Class */
 	.bDeviceProtocol = 1,		/* Interface Association */
-#ifdef SAMD21E17
-	.bMaxPacketSize0 = 64,
+#if defined(SAMD21E17) || defined(LM4F)
+	.bMaxPacketSize0 = 64,		/*Fixed for icdi*/
 #else
 	.bMaxPacketSize0 = 32,
 #endif

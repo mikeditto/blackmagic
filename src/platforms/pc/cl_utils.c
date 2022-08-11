@@ -158,6 +158,7 @@ void cl_init(BMP_CL_OPTIONS_t *opt, int argc, char **argv)
 	int c;
 	opt->opt_target_dev = 1;
 	opt->opt_flash_size = 16 * 1024 *1024;
+	opt->opt_flash_start = 0xffffffff;
 	while((c = getopt(argc, argv, "eEhHv:d:s:I:c:CnltVta:S:jpP:rR")) != -1) {
 		switch(c) {
 		case 'c':
@@ -265,9 +266,18 @@ void cl_init(BMP_CL_OPTIONS_t *opt, int argc, char **argv)
 static void display_target(int i, target *t, void *context)
 {
 	(void)context;
-	DEBUG_INFO("*** %2d   %c  %s %s\n", i, target_attached(t)?'*':' ',
-		  target_driver_name(t),
-		  (target_core_name(t)) ? target_core_name(t): "");
+	if (!strcmp(target_driver_name(t), "ARM Cortex-M")) {
+		DEBUG_INFO("***%2d%sUnknown %s Designer %3x Partno %3x %s\n",
+			  i, target_attached(t)?" * ":" ",
+			  target_driver_name(t),
+			  target_designer(t),
+			  target_idcode(t),
+			  (target_core_name(t)) ? target_core_name(t): "");
+	} else {
+		DEBUG_INFO("*** %2d   %c  %s %s\n", i, target_attached(t)?'*':' ',
+			  target_driver_name(t),
+			  (target_core_name(t)) ? target_core_name(t): "");
+	}
 }
 
 int cl_execute(BMP_CL_OPTIONS_t *opt)
@@ -353,7 +363,7 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 			break;
 		}
 	}
-	if (opt->opt_flash_start < flash_start)
+	if (opt->opt_flash_start == 0xffffffff)
 		opt->opt_flash_start = flash_start;
 	if (opt->opt_mode == BMP_MODE_TEST)
 		goto target_detach;
