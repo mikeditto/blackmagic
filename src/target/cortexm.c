@@ -387,6 +387,12 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 			target_halt_resume(t, 0);
 		}
 		break;
+	case AP_DESIGNER_CS:
+		PROBE(stm32f1_probe);
+		break;
+	case AP_DESIGNER_GIGADEVICE:
+		PROBE(gd32f1_probe);
+		break;
 	case AP_DESIGNER_STM:
 		PROBE(stm32f1_probe);
 		PROBE(stm32f4_probe);
@@ -432,20 +438,19 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 						   "probed device\n", ap->ap_designer, ap->ap_partno);
 #endif
 		}
-		if (ap->ap_partno == 0x4c3)  /* Cortex-M3 ROM */
+		if (ap->ap_partno == 0x4c3)  { /* Cortex-M3 ROM */
 			PROBE(stm32f1_probe); /* Care for STM32F1 clones */
-		else if (ap->ap_partno == 0x471) { /* Cortex-M0 ROM */
+			PROBE(lpc15xx_probe); /* Thanks to JojoS for testing */
+		} else if (ap->ap_partno == 0x471)  { /* Cortex-M0 ROM */
 			PROBE(lpc11xx_probe); /* LPC24C11 */
 			PROBE(lpc43xx_probe);
-		}
-		else if (ap->ap_partno == 0x4c4) { /* Cortex-M4 ROM */
+		} else if (ap->ap_partno == 0x4c4) { /* Cortex-M4 ROM */
 			PROBE(lpc43xx_probe);
 			PROBE(lpc546xx_probe);
 			PROBE(kinetis_probe); /* Older K-series */
 		}
 		/* Info on PIDR of these parts wanted! */
 		PROBE(sam3x_probe);
-		PROBE(lpc15xx_probe);
 		PROBE(lmi_probe);
 		PROBE(ke04_probe);
 		PROBE(lpc17xx_probe);
@@ -536,8 +541,6 @@ void cortexm_detach(target *t)
 	target_mem_write32(t, CORTEXM_DEMCR, ap->ap_cortexm_demcr);
 	/* Disable debug */
 	target_mem_write32(t, CORTEXM_DHCSR, CORTEXM_DHCSR_DBGKEY);
-	/* Add some clock cycles to get the CPU running again.*/
-	target_mem_read32(t, 0);
 }
 
 enum { DB_DHCSR, DB_DCRSR, DB_DCRDR, DB_DEMCR };
@@ -837,8 +840,6 @@ static void cortexm_halt_resume(target *t, bool step)
 		target_mem_write32(t, CORTEXM_ICIALLU, 0);
 
 	target_mem_write32(t, CORTEXM_DHCSR, dhcsr);
-	/* Add some clock cycles to get the CPU running again.*/
-	target_mem_read32(t, 0);
 }
 
 static int cortexm_fault_unwind(target *t)

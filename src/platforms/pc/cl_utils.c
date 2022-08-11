@@ -28,7 +28,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-
+#include "version.h"
 #include "target.h"
 #include "target_internal.h"
 
@@ -116,8 +116,8 @@ static void bmp_munmap(struct mmap_data *map)
 static void cl_help(char **argv, BMP_CL_OPTIONS_t *opt)
 {
 	DEBUG_WARN("%s for: \n", opt->opt_idstring);
-	DEBUG_WARN("\tBMP Firmware, ST-Link V2/3, CMSIS_DAP, JLINK and "
-			   "LIBFTDI/MPSSE\n\n");
+	DEBUG_WARN("\tBMP hosted %s\n\t\tfor ST-Link V2/3, CMSIS_DAP, JLINK and "
+			   "LIBFTDI/MPSSE\n\n", FIRMWARE_VERSION);
 	DEBUG_WARN("Usage: %s [options]\n", argv[0]);
 	DEBUG_WARN("\t-h\t\t: This help.\n");
 	DEBUG_WARN("\t-v[bitmask]\t: Increasing verbosity. Bitmask:\n");
@@ -298,8 +298,7 @@ int cl_execute(BMP_CL_OPTIONS_t *opt)
 	platform_srst_set_val(opt->opt_connect_under_reset);
 	if (opt->opt_mode == BMP_MODE_TEST)
 		DEBUG_INFO("Running in Test Mode\n");
-	if (platform_target_voltage())
-		DEBUG_INFO("Target voltage: %s Volt\n", platform_target_voltage());
+	DEBUG_INFO("Target voltage: %s Volt\n", platform_target_voltage());
 	if (opt->opt_usejtag) {
 		num_targets = platform_jtag_scan(NULL);
 	} else {

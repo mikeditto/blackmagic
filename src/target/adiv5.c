@@ -614,6 +614,14 @@ ADIv5_AP_t *adiv5_new_ap(ADIv5_DP_t *dp, uint8_t apsel)
 
 void adiv5_dp_init(ADIv5_DP_t *dp)
 {
+#define DPIDR_PARTNO_MASK 0x0ff00000
+/* Check IDCODE for a valid designer and sensible PARTNO*/
+	if (((dp->idcode & 0xfff) == 0)  ||
+		((dp->idcode & DPIDR_PARTNO_MASK)) == DPIDR_PARTNO_MASK) {
+		DEBUG_WARN("Invalid DP idcode %08" PRIx32 "\n", dp->idcode);
+		free(dp);
+		return;
+	}
 	DEBUG_INFO("DPIDR 0x%08" PRIx32 " (v%d %srev%d)\n", dp->idcode,
 			   (dp->idcode >> 12) & 0xf,
 			   (dp->idcode & 0x10000) ? "MINDP " : "", dp->idcode >> 28);
@@ -664,7 +672,6 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 			return;
 		}
 	}
-
 	/* This AP reset logic is described in ADIv5, but fails to work
 	 * correctly on STM32.	CDBGRSTACK is never asserted, and we
 	 * just wait forever.  This scenario is described in B2.4.1
@@ -691,8 +698,7 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 		}
 	}
 
-	uint32_t dp_idcode = adiv5_dp_read(dp, ADIV5_DP_IDCODE);
-	if ((dp_idcode & ADIV5_DP_VERSION_MASK) == ADIV5_DPv2) {
+	if ((dp->idcode & ADIV5_DP_VERSION_MASK) == ADIV5_DPv2) {
 		/* Read TargetID. Can be done with device in WFI, sleep or reset!*/
 		adiv5_dp_write(dp, ADIV5_DP_SELECT, ADIV5_DP_BANK2);
 		dp->targetid = adiv5_dp_read(dp, ADIV5_DP_CTRLSTAT);
@@ -731,6 +737,7 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 				dp->ap_cleanup(i);
 #endif
 			adiv5_ap_unref(ap);
+			adiv5_dp_unref(dp);
 			/* FIXME: Should we expect valid APs behind duplicate ones? */
 			return;
 		}
