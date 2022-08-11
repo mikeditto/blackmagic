@@ -263,13 +263,10 @@ static const struct {
 
 extern bool cortexa_probe(ADIv5_AP_t *apb, uint32_t debug_base);
 
-static void adiv5_dp_ref(ADIv5_DP_t *dp)
-{
-	dp->refcnt++;
-}
-
 void adiv5_ap_ref(ADIv5_AP_t *ap)
 {
+	if (ap->refcnt == 0)
+		ap->dp->refcnt++;
 	ap->refcnt++;
 }
 
@@ -404,23 +401,23 @@ static bool cortexm_prepare(ADIv5_AP_t *ap)
 	return true;
 }
 
-static bool adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, int num_entry)
+/* Return true if we find a debuggable device.*/
+static void adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, int num_entry)
 {
 	(void) num_entry;
 	addr &= 0xfffff000; /* Mask out base address */
 	if (addr == 0) /* No rom table on this AP */
-		return false;
+		return;
 	uint32_t cidr = adiv5_ap_read_id(ap, addr + CIDR0_OFFSET);
 	if ((cidr & ~CID_CLASS_MASK) != CID_PREAMBLE) {
 		/* Maybe caused by a not halted CortexM */
-		if (!ap->apsel && ((ap->idr & 0xf) == ARM_AP_TYPE_AHB)) {
+		if ((ap->idr & 0xf) == ARM_AP_TYPE_AHB) {
 			if (!cortexm_prepare(ap))
-				return false; /* Halting failed! */
+				return; /* Halting failed! */
 			/* CPU now halted, read cidr again. */
 			cidr = adiv5_ap_read_id(ap, addr + CIDR0_OFFSET);
 		}
 	}
-	bool res = false;
 #if defined(ENABLE_DEBUG)
 	char indent[recursion + 1];
 
@@ -430,7 +427,7 @@ static bool adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, 
 
 	if (adiv5_dp_error(ap->dp)) {
 		DEBUG_WARN("%sFault reading ID registers\n", indent);
-		return false;
+		return;
 	}
 
 	/* CIDR preamble sanity check */
@@ -438,7 +435,7 @@ static bool adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, 
 		DEBUG_WARN("%s%d 0x%08" PRIx32": 0x%08" PRIx32
 			  " <- does not match preamble (0x%X)\n",
 			  indent + 1, num_entry, addr, cidr, CID_PREAMBLE);
-		return false;
+		return;
 	}
 
 	uint64_t pidr = adiv5_ap_read_pidr(ap, addr);
@@ -465,10 +462,8 @@ static bool adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, 
 		if (recursion == 0) {
 			ap->ap_designer = designer;
 			ap->ap_partno   = partno;
-			if ((ap->ap_designer == AP_DESIGNER_ATMEL) && (ap->ap_partno == 0xcd0)) {
+			if ((ap->ap_designer == AP_DESIGNER_ATMEL) && (ap->ap_partno == 0xcd0))
 				cortexm_probe(ap);
-				return true;
-			}
 		}
 		for (int i = 0; i < 960; i++) {
 			adiv5_dp_error(ap->dp);
@@ -501,7 +496,7 @@ static bool adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, 
 			DEBUG_WARN("%s0x%" PRIx32 ": 0x%02" PRIx32 "%08" PRIx32
 				  " <- does not match ARM JEP-106\n",
 				  indent, addr, (uint32_t)(pidr >> 32), (uint32_t)pidr);
-			return false;
+			return;
 		}
 
 		/* ADIv6: For CoreSight components, read DEVTYPE and ARCHID */
@@ -543,7 +538,6 @@ static bool adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, 
 							   cidc_debug_strings[cid_class],
 							   cidc_debug_strings[pidr_pn_bits[i].cidc]);
 				}
-				res = true;
 				switch (pidr_pn_bits[i].arch) {
 				case aa_cortexm:
 					DEBUG_INFO("%s-> cortexm_probe\n", indent + 1);
@@ -567,7 +561,7 @@ static bool adiv5_component_probe(ADIv5_AP_t *ap, uint32_t addr, int recursion, 
 				  (uint32_t)(pidr >> 32), (uint32_t)pidr, dev_type, arch_id);
 		}
 	}
-	return res;
+	return;
 }
 
 ADIv5_AP_t *adiv5_new_ap(ADIv5_DP_t *dp, uint8_t apsel)
@@ -598,7 +592,6 @@ ADIv5_AP_t *adiv5_new_ap(ADIv5_DP_t *dp, uint8_t apsel)
 	}
 
 	memcpy(ap, &tmpap, sizeof(*ap));
-	adiv5_dp_ref(dp);
 
 	ap->csw = adiv5_ap_read(ap, ADIV5_AP_CSW) &
 		~(ADIV5_AP_CSW_SIZE_MASK | ADIV5_AP_CSW_ADDRINC_MASK);
@@ -612,6 +605,8 @@ ADIv5_AP_t *adiv5_new_ap(ADIv5_DP_t *dp, uint8_t apsel)
 	uint32_t cfg = adiv5_ap_read(ap, ADIV5_AP_CFG);
 	DEBUG_INFO("AP %3d: IDR=%08"PRIx32" CFG=%08"PRIx32" BASE=%08" PRIx32
 			   " CSW=%08"PRIx32"\n", apsel, ap->idr, cfg, ap->base, ap->csw);
+	DEBUG_INFO("AP#0 IDR = 0x%08" PRIx32 " (AHB-AP var%x rev%x)\n",
+			   ap->idr, (ap->idr >> 4) & 0xf, ap->idr >> 28);
 #endif
 	adiv5_ap_ref(ap);
 	return ap;
@@ -619,8 +614,10 @@ ADIv5_AP_t *adiv5_new_ap(ADIv5_DP_t *dp, uint8_t apsel)
 
 void adiv5_dp_init(ADIv5_DP_t *dp)
 {
+	DEBUG_INFO("DPIDR 0x%08" PRIx32 " (v%d %srev%d)\n", dp->idcode,
+			   (dp->idcode >> 12) & 0xf,
+			   (dp->idcode & 0x10000) ? "MINDP " : "", dp->idcode >> 28);
 	volatile uint32_t ctrlstat = 0;
-	adiv5_dp_ref(dp);
 #if PC_HOSTED  == 1
 	platform_adiv5_dp_defaults(dp);
 	if (!dp->ap_write)
@@ -663,6 +660,7 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 			break;
 		if (platform_timeout_is_expired(&timeout)) {
 			DEBUG_INFO("DEBUG Power-Up failed\n");
+			free(dp); /* No AP that referenced this DP so long*/
 			return;
 		}
 	}
@@ -704,6 +702,7 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 	/* Probe for APs on this DP */
 	uint32_t last_base = 0;
 	int void_aps = 0;
+	dp->refcnt++;
 	for(int i = 0; (i < 256) && (void_aps < 8); i++) {
 		ADIv5_AP_t *ap = NULL;
 #if PC_HOSTED == 1
@@ -718,10 +717,12 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 			if (dp->ap_cleanup)
 				dp->ap_cleanup(i);
 #endif
-			if (i == 0)
+			if (i == 0) {
+				adiv5_dp_unref(dp);
 				return;
-			else
+			} else {
 				continue;
+			}
 		}
 		if (ap->base == last_base) {
 			DEBUG_WARN("AP %d: Duplicate base\n", i);
@@ -729,7 +730,7 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 			if (dp->ap_cleanup)
 				dp->ap_cleanup(i);
 #endif
-			free(ap);
+			adiv5_ap_unref(ap);
 			/* FIXME: Should we expect valid APs behind duplicate ones? */
 			return;
 		}
@@ -749,7 +750,12 @@ void adiv5_dp_init(ADIv5_DP_t *dp)
 
 		/* The rest should only be added after checking ROM table */
 		adiv5_component_probe(ap, ap->base, 0, 0);
+		adiv5_ap_unref(ap);
 	}
+	/* We halted at least CortexM for Romtable scan.
+	 * Release the devices now. Attach() will halt them again.*/
+	for (target *t = target_list; t; t = t->next)
+		target_halt_resume(t, false);
 	adiv5_dp_unref(dp);
 }
 
