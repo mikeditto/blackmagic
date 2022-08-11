@@ -75,24 +75,18 @@ static bool firmware_dp_low_read(ADIv5_DP_t *dp, uint16_t addr, uint32_t *res)
  */
 int adiv5_swdp_scan(uint32_t targetid)
 {
-	ADIv5_DP_t idp, *initial_dp = &idp;
+	ADIv5_DP_t idp = {
+		.dp_low_write = firmware_dp_low_write,
+		.dp_low_read = firmware_dp_low_read,
+		.error = firmware_swdp_error,
+		.dp_read = firmware_swdp_read,
+		.low_access = firmware_swdp_low_access,
+		.abort = firmware_swdp_abort,
+	};
+	ADIv5_DP_t *initial_dp = &idp;
 	target_list_free();
-	memset(initial_dp, 0, sizeof(ADIv5_DP_t));
 	if (swdptap_init(initial_dp))
 		return -1;
-	/* Set defaults when no procedure given*/
-	if (!initial_dp->dp_low_write)
-		initial_dp->dp_low_write = firmware_dp_low_write;
-	if (!initial_dp->dp_low_read)
-		initial_dp->dp_low_read = firmware_dp_low_read;
-	if (!initial_dp->error)
-		initial_dp->error = firmware_swdp_error;
-	if (!initial_dp->dp_read)
-		initial_dp->dp_read = firmware_swdp_read;
-	if (!initial_dp->error)
-		initial_dp->error = firmware_swdp_error;
-	if (!initial_dp->low_access)
-       initial_dp->low_access = firmware_swdp_low_access;
 	/* DORMANT-> SWD sequence*/
 	initial_dp->seq_out(0xFFFFFFFF, 32);
 	initial_dp->seq_out(0xFFFFFFFF, 32);
@@ -125,14 +119,14 @@ int adiv5_swdp_scan(uint32_t targetid)
 			initial_dp->seq_out(0xE79E, 16); /* 0b0111100111100111 */
 			dp_line_reset(initial_dp);
 			initial_dp->fault = 0;
-			volatile struct exception e;
-			TRY_CATCH (e, EXCEPTION_ALL) {
+			volatile struct exception e2;
+			TRY_CATCH (e2, EXCEPTION_ALL) {
 				idcode = initial_dp->low_access(initial_dp, ADIV5_LOW_READ,
 									  ADIV5_DP_IDCODE, 0);
 			}
-			if (e.type) {
+			if (e2.type) {
 				DEBUG_WARN("No usable DP found\n");
-				return -1;
+				return 0;
 			}
 		}
 		if ((idcode & ADIV5_DP_VERSION_MASK) == ADIV5_DPv2) {
@@ -241,7 +235,7 @@ uint32_t firmware_swdp_low_access(ADIv5_DP_t *dp, uint8_t RnW,
 
 	if((addr & ADIV5_APnDP) && dp->fault) return 0;
 
-	platform_timeout_set(&timeout, 2000);
+	platform_timeout_set(&timeout, 20);
 	do {
 		dp->seq_out(request, 8);
 		ack = dp->seq_in(3);
@@ -251,8 +245,11 @@ uint32_t firmware_swdp_low_access(ADIv5_DP_t *dp, uint8_t RnW,
 		}
 	} while (ack == SWDP_ACK_WAIT && !platform_timeout_is_expired(&timeout));
 
-	if (ack == SWDP_ACK_WAIT)
-		raise_exception(EXCEPTION_TIMEOUT, "SWDP ACK timeout");
+	if (ack == SWDP_ACK_WAIT) {
+		dp->abort(dp, ADIV5_DP_ABORT_DAPABORT);
+		dp->fault = 1;
+		return 0;
+	}
 
 	if(ack == SWDP_ACK_FAULT) {
 		dp->fault = 1;

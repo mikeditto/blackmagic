@@ -21,7 +21,7 @@ ifeq ($(ENABLE_DEBUG), 1)
 CFLAGS += -g3 -ggdb
 endif
 
-CFLAGS += -mthumb -mcpu=cortex-m0plus \
+CFLAGS += -mthumb -mcpu=cortex-m0plus -DDFU_SERIAL_LENGTH=9 \
 	-DSAMD -DSAMD21E17 -DBLACKMAGIC -I../libopencm3/include \
 	-Iplatforms/samd -msoft-float -ffunction-sections -fdata-sections -MD
 
