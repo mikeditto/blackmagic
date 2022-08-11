@@ -39,6 +39,7 @@ SRC =			\
 	lpc17xx.c	\
 	lpc15xx.c	\
 	lpc43xx.c	\
+	lpc546xx.c	\
 	kinetis.c	\
 	main.c		\
 	morse.c		\
@@ -145,5 +146,5 @@ command.c: include/version.h
 
 include/version.h: FORCE
 	$(Q)echo " GIT include/version.h"
-	$(Q)echo "#define FIRMWARE_VERSION \"$(shell git describe --always --dirty)\"" > $@
+	$(Q)echo "#define FIRMWARE_VERSION \"$(shell git describe --always --dirty --tags)\"" > $@
 -include *.d
