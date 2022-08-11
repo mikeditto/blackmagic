@@ -116,13 +116,14 @@ int adiv5_swdp_scan(uint32_t targetid)
 			idcode = initial_dp->low_access(initial_dp, ADIV5_LOW_READ,
 										   ADIV5_DP_IDCODE, 0);
 		}
-		if (e.type) {
+		if (e.type || initial_dp->fault) {
 			is_v2 = false;
 			DEBUG_WARN("Trying old JTAG to SWD sequence\n");
 			initial_dp->seq_out(0xFFFFFFFF, 32);
 			initial_dp->seq_out(0xFFFFFFFF, 32);
 			initial_dp->seq_out(0xE79E, 16); /* 0b0111100111100111 */
 			dp_line_reset(initial_dp);
+			initial_dp->fault = 0;
 			volatile struct exception e;
 			TRY_CATCH (e, EXCEPTION_ALL) {
 				idcode = initial_dp->low_access(initial_dp, ADIV5_LOW_READ,
@@ -146,6 +147,9 @@ int adiv5_swdp_scan(uint32_t targetid)
 				adiv5_dp_write(initial_dp, ADIV5_DP_CTRLSTAT, 0);
 				break;
 			}
+			if (!initial_dp->dp_low_read)
+				/* E.g. CMSIS_DAP < V1.2 can not handle multu-drop!*/
+				is_v2 = false;
 		} else {
 			is_v2 = false;
 		}
@@ -161,8 +165,9 @@ int adiv5_swdp_scan(uint32_t targetid)
 			initial_dp->dp_low_write(initial_dp, ADIV5_DP_TARGETSEL,
 									dp_targetid);
 			if (initial_dp->dp_low_read(initial_dp, ADIV5_DP_IDCODE,
-										&idcode))
+										&idcode)) {
 				continue;
+			}
 		} else {
 			dp_targetid = 0;
 		}
@@ -238,10 +243,8 @@ uint32_t firmware_swdp_low_access(ADIv5_DP_t *dp, uint8_t RnW,
 		dp->seq_out(request, 8);
 		ack = dp->seq_in(3);
 		if (ack == SWDP_ACK_FAULT) {
-			/* On fault, abort() and repeat the command once.*/
-			dp->error(dp);
-			dp->seq_out(request, 8);
-			ack = dp->seq_in(3);
+			dp->fault = 1;
+			return 0;
 		}
 	} while (ack == SWDP_ACK_WAIT && !platform_timeout_is_expired(&timeout));
 
