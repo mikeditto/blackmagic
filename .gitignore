@@ -17,5 +17,6 @@ tags
 blackmagic_upgrade
 *.exe
 .DS_Store
+*.elf
 .vscode
 cscope.out

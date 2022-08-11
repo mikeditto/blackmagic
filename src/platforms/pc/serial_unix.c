@@ -31,7 +31,7 @@
 #include "cl_utils.h"
 
 static int fd;  /* File descriptor for connection to GDB remote */
-extern int cl_debuglevel;
+
 /* A nice routine grabbed from
  * https://stackoverflow.com/questions/6947413/how-to-open-read-and-write-from-serial-port-in-c
  */
@@ -69,10 +69,10 @@ static int set_interface_attribs(void)
 }
 #define BMP_IDSTRING "usb-Black_Sphere_Technologies_Black_Magic_Probe"
 #define DEVICE_BY_ID "/dev/serial/by-id/"
-int serial_open(BMP_CL_OPTIONS_t *opt)
+int serial_open(BMP_CL_OPTIONS_t *cl_opts, char *serial)
 {
 	char name[4096];
-	if (!opt->opt_device) {
+	if (!cl_opts->opt_device) {
 		/* Try to find some BMP if0*/
 		struct dirent *dp;
 		DIR *dir = opendir(DEVICE_BY_ID);
@@ -86,8 +86,7 @@ int serial_open(BMP_CL_OPTIONS_t *opt)
 			if ((strstr(dp->d_name, BMP_IDSTRING)) &&
 				(strstr(dp->d_name, "-if00"))) {
 				num_total++;
-				if (((opt->opt_serial) &&
-				 (!strstr(dp->d_name, opt->opt_serial))))
+				if ((serial) && (!strstr(dp->d_name, serial)))
 					continue;
 				num_devices++;
 				strcpy(name, DEVICE_BY_ID);
@@ -108,8 +107,8 @@ int serial_open(BMP_CL_OPTIONS_t *opt)
 						fprintf(stderr, "%s\n", dp->d_name);
 				}
 				closedir(dir);
-				if (opt->opt_serial)
-					fprintf(stderr, "Do no match given serial \"%s\"\n", opt->opt_serial);
+				if (serial)
+					fprintf(stderr, "Do no match given serial \"%s\"\n", serial);
 				else
 					fprintf(stderr, "Select Probe with -s <(Partial) Serial Number\n");
 			} else {
@@ -118,7 +117,7 @@ int serial_open(BMP_CL_OPTIONS_t *opt)
 			return -1;
 		}
 	} else {
-		strncpy(name, opt->opt_device, sizeof(name) - 1);
+		strncpy(name, cl_opts->opt_device, sizeof(name) - 1);
 	}
 	fd = open(name, O_RDWR | O_SYNC | O_NOCTTY);
 	if (fd < 0) {
@@ -156,15 +155,13 @@ int platform_buffer_read(uint8_t *data, int maxsize)
 	uint8_t *c;
 	int s;
 	int ret;
-	uint32_t endTime;
 	fd_set  rset;
 	struct timeval tv;
 
 	c = data;
 	tv.tv_sec = 0;
 
-	endTime = platform_time_ms() + RESP_TIMEOUT;
-	tv.tv_usec = 1000 * (endTime - platform_time_ms());
+	tv.tv_usec = 1000 * RESP_TIMEOUT;
 
 	/* Look for start of response */
 	do {
