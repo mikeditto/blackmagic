@@ -61,7 +61,7 @@ static const struct usb_device_descriptor dev = {
 #ifdef SAMD21E17
 	.bMaxPacketSize0 = 64,
 #else
-	.bMaxPacketSize0 = 8,
+	.bMaxPacketSize0 = 32,
 #endif
 	.idVendor = 0x1D50,
 	.idProduct = 0x6018,
