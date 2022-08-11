@@ -67,9 +67,8 @@ bool firmware_dp_low_write(ADIv5_DP_t *dp, uint16_t addr, const uint32_t data)
  */
 int adiv5_swdp_scan(uint32_t targetid)
 {
+	volatile struct exception e;
 	static bool scan_multidrop = true;
-	uint32_t idcode = 0;
-	volatile uint32_t target_id;
 	ADIv5_DP_t idp = {
 		.dp_low_write = firmware_dp_low_write,
 		.error = firmware_swdp_error,
@@ -93,11 +92,13 @@ int adiv5_swdp_scan(uint32_t targetid)
 	 * 0x1a Arm CoreSight SW-DP activation sequence
 	 * 20 bits start of reset another reset sequence*/
 	initial_dp->seq_out(0x1a0, 12);
+	uint32_t idcode = 0;
+	volatile uint32_t target_id = 0;
 	if (!targetid || !initial_dp->dp_low_write) {
 		/* No targetID given on the command line or probe can not
 		 * handle multi-drop. Try to read ID */
 		dp_line_reset(initial_dp);
-		volatile struct exception e;
+
 		TRY_CATCH (e, EXCEPTION_ALL) {
 			idcode = initial_dp->dp_read(initial_dp, ADIV5_DP_IDCODE);
 		}
@@ -109,11 +110,11 @@ int adiv5_swdp_scan(uint32_t targetid)
 			initial_dp->seq_out(0xE79E, 16); /* 0b0111100111100111 */
 			dp_line_reset(initial_dp);
 			initial_dp->fault = 0;
-			volatile struct exception e2;
-			TRY_CATCH (e2, EXCEPTION_ALL) {
+
+			TRY_CATCH (e, EXCEPTION_ALL) {
 				idcode = initial_dp->dp_read(initial_dp, ADIV5_DP_IDCODE);
 			}
-			if (e2.type || initial_dp->fault) {
+			if (e.type || initial_dp->fault) {
 				DEBUG_WARN("No usable DP found\n");
 				return -1;
 			}
@@ -150,7 +151,6 @@ int adiv5_swdp_scan(uint32_t targetid)
 			dp_targetid = (i << 28) | (target_id & 0x0fffffff);
 			initial_dp->dp_low_write(initial_dp, ADIV5_DP_TARGETSEL,
 									dp_targetid);
-			volatile struct exception e;
 			TRY_CATCH (e, EXCEPTION_ALL) {
 				idcode = initial_dp->dp_read(initial_dp, ADIV5_DP_IDCODE);
 			}
@@ -252,8 +252,10 @@ uint32_t firmware_swdp_low_access(ADIv5_DP_t *dp, uint8_t RnW,
 		raise_exception(EXCEPTION_ERROR, "SWDP invalid ACK");
 
 	if(RnW) {
-		if(dp->seq_in_parity(&response, 32))  /* Give up on parity error */
+		if (dp->seq_in_parity(&response, 32)) { /* Give up on parity error */
+			dp->fault = 1;
 			raise_exception(EXCEPTION_ERROR, "SWDP Parity error");
+		}
 	} else {
 		dp->seq_out_parity(value, 32);
 		/* ARM Debug Interface Architecture Specification ADIv5.0 to ADIv5.2
