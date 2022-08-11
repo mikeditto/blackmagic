@@ -20,3 +20,4 @@ blackmagic_upgrade
 *.elf
 .vscode
 cscope.out
+cscope.files
