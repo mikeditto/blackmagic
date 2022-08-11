@@ -86,7 +86,7 @@ static int cortexm_breakwatch_clear(target *t, struct breakwatch *);
 static target_addr cortexm_check_watch(target *t);
 
 #define CORTEXM_MAX_WATCHPOINTS	4	/* architecture says up to 15, no implementation has > 4 */
-#define CORTEXM_MAX_BREAKPOINTS	6	/* architecture says up to 127, no implementation has > 6 */
+#define CORTEXM_MAX_BREAKPOINTS	8	/* architecture says up to 127, no implementation has > 8 */
 
 static int cortexm_hostio_request(target *t);
 
@@ -327,9 +327,11 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 		t->core = "M0";
 		break;
 	default:
-		DEBUG_WARN("Unexpected CortexM CPUID partno %04x\n", cpuid_partno);
+		DEBUG_WARN("Unexpected CortexM CPUID partno %04" PRIx32 "\n",
+				   cpuid_partno);
 	}
-	DEBUG_INFO("CPUID 0x%08" PRIx32 " (%s var %x rev %x)\n", t->cpuid,
+	DEBUG_INFO("CPUID 0x%08" PRIx32 " (%s var %" PRIx32 " rev %" PRIx32 ")\n",
+			   t->cpuid,
 			   t->core, (t->cpuid & CPUID_REVISION_MASK) >> 20,
 			   t->cpuid & CPUID_PATCH_MASK);
 
@@ -400,10 +402,6 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 		PROBE(stm32l0_probe);
 		PROBE(stm32l4_probe);
 		PROBE(stm32g0_probe);
-		if (ap->ap_partno == 0x472) {
-			t->driver = "STM32L552(no flash)";
-			target_halt_resume(t, 0);
-		}
 		break;
 	case AP_DESIGNER_CYPRESS:
 		DEBUG_WARN("Unhandled Cypress device\n");
