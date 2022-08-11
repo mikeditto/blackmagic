@@ -75,8 +75,8 @@ static bool firmware_dp_low_read(ADIv5_DP_t *dp, uint16_t addr, uint32_t *res)
  */
 int adiv5_swdp_scan(uint32_t targetid)
 {
-	target_list_free();
 	ADIv5_DP_t idp, *initial_dp = &idp;
+	target_list_free();
 	memset(initial_dp, 0, sizeof(ADIv5_DP_t));
 	if (swdptap_init(initial_dp))
 		return -1;
