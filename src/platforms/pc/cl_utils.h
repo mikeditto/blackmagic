@@ -1,7 +1,7 @@
 /*
  * This file is part of the Black Magic Debug project.
  *
- * Copyright (C) 2019  Uwe Bonnes
+ * Copyright (C) 2019 - 2020  Uwe Bonnes
  * Written by Uwe Bonnes (bon@elektron.ikp.physik.tu-darmstadt.de)
  *
  * This program is free software: you can redistribute it and/or modify
@@ -40,6 +40,7 @@ typedef struct BMP_CL_OPTIONS_s {
 	enum bmp_cl_mode opt_mode;
 	bool opt_usejtag;
 	bool opt_tpwr;
+	bool opt_list_only;
 	bool opt_connect_under_reset;
 	char *opt_flash_file;
 	char *opt_device;
@@ -54,7 +55,6 @@ typedef struct BMP_CL_OPTIONS_s {
 	char     *opt_idstring;
 }BMP_CL_OPTIONS_t;
 
-extern int cl_debuglevel;
 void cl_init(BMP_CL_OPTIONS_t *opt, int argc, char **argv);
 int cl_execute(BMP_CL_OPTIONS_t *opt);
 int serial_open(BMP_CL_OPTIONS_t *opt, char *serial);

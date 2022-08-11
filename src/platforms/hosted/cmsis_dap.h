@@ -16,24 +16,35 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.	 If not, see <http://www.gnu.org/licenses/>.
  */
-#if !defined(__STLINKV2_H_)
+#if !defined(__CMSIS_DAP_H_)
+#define __CMSIS_DAP_H_
 
-#define STLINK_ERROR_FAIL -1
-#define STLINK_ERROR_OK 0
-#define STLINK_ERROR_WAIT 1
+#include "adiv5.h"
+#include "cl_utils.h"
 
-#define STLINK_DEBUG_PORT_ACCESS            0xffff
+#if defined(CMSIS_DAP)
+int dap_init(bmp_info_t *info);
+int dap_enter_debug_swd(ADIv5_DP_t *dp);
+void dap_exit_function(void);
+void dap_adiv5_dp_defaults(ADIv5_DP_t *dp);
+int cmsis_dap_jtagtap_init(jtag_proc_t *jtag_proc);
+int dap_jtag_dp_init(ADIv5_DP_t *dp);
+#else
+int dap_init(bmp_info_t *info) {(void)info; return -1;}
+int dap_enter_debug_swd(ADIv5_DP_t *dp) {(void)dp; return -1;}
+void dap_exit_function(void) {return;};
+void dap_adiv5_dp_defaults(ADIv5_DP_t *dp) {(void)dp; return; }
+int cmsis_dap_jtagtap_init(jtag_proc_t *jtag_proc)
+{
+	(void)jtag_proc;
+	return -1;
+}
+int dap_jtag_dp_init(ADIv5_DP_t *dp)
+{
+	(void)dp;
+	return -1;
+}
 
-int stlink_init(bmp_info_t *info);
-int stlink_hwversion(void);
-const char *stlink_target_voltage(bmp_info_t *info);
-void stlink_srst_set_val(bmp_info_t *info, bool assert);
-bool stlink_srst_get_val(void);
-int stlink_enter_debug_swd(bmp_info_t *info, ADIv5_DP_t *dp);
+#endif
 
-const char *stlink_target_voltage(bmp_info_t *info);
-void stlink_adiv5_dp_defaults(ADIv5_DP_t *dp);
-int stlink_jtag_dp_init(ADIv5_DP_t *dp);
-int jtag_scan_stlinkv2(bmp_info_t *info, const uint8_t *irlens);
-void stlink_exit_function(bmp_info_t *info);
 #endif
