@@ -13,7 +13,7 @@ CFLAGS += -Wall -Wextra -Werror -Wno-char-subscripts \
 	-I. -Iinclude -I$(PLATFORM_DIR)
 
 ifeq ($(ENABLE_DEBUG), 1)
-CFLAGS += -DENABLE_DEBUG -g3 -ggdb
+CFLAGS += -DENABLE_DEBUG
 endif
 
 SRC =			\
@@ -108,8 +108,8 @@ $(TARGET): include/version.h $(OBJ)
 
 clean:	host_clean
 	$(Q)echo "  CLEAN"
-	-$(Q)$(RM) -f *.o *.d *~ blackmagic $(HOSTFILES)
-	-$(Q)$(RM) -f platforms/*/*.o platforms/*/*.d mapfile include/version.h
+	-$(Q)$(RM) *.o *.d *~ blackmagic $(HOSTFILES)
+	-$(Q)$(RM) platforms/*/*.o platforms/*/*.d mapfile include/version.h
 
 all_platforms:
 	$(Q)set -e ;\
