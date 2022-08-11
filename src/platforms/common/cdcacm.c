@@ -144,7 +144,7 @@ static const struct usb_interface_descriptor gdb_comm_iface[] = {{
 	.bNumEndpoints = 1,
 	.bInterfaceClass = USB_CLASS_CDC,
 	.bInterfaceSubClass = USB_CDC_SUBCLASS_ACM,
-	.bInterfaceProtocol = USB_CDC_PROTOCOL_AT,
+	.bInterfaceProtocol = USB_CDC_PROTOCOL_NONE,
 	.iInterface = 4,
 
 	.endpoint = gdb_comm_endp,
@@ -174,7 +174,7 @@ static const struct usb_iface_assoc_descriptor gdb_assoc = {
 	.bInterfaceCount = 2,
 	.bFunctionClass = USB_CLASS_CDC,
 	.bFunctionSubClass = USB_CDC_SUBCLASS_ACM,
-	.bFunctionProtocol = USB_CDC_PROTOCOL_AT,
+	.bFunctionProtocol = USB_CDC_PROTOCOL_NONE,
 	.iFunction = 0,
 };
 
@@ -247,7 +247,7 @@ static const struct usb_interface_descriptor uart_comm_iface[] = {{
 	.bNumEndpoints = 1,
 	.bInterfaceClass = USB_CLASS_CDC,
 	.bInterfaceSubClass = USB_CDC_SUBCLASS_ACM,
-	.bInterfaceProtocol = USB_CDC_PROTOCOL_AT,
+	.bInterfaceProtocol = USB_CDC_PROTOCOL_NONE,
 	.iInterface = 5,
 
 	.endpoint = uart_comm_endp,
@@ -277,7 +277,7 @@ static const struct usb_iface_assoc_descriptor uart_assoc = {
 	.bInterfaceCount = 2,
 	.bFunctionClass = USB_CLASS_CDC,
 	.bFunctionSubClass = USB_CDC_SUBCLASS_ACM,
-	.bFunctionProtocol = USB_CDC_PROTOCOL_AT,
+	.bFunctionProtocol = USB_CDC_PROTOCOL_NONE,
 	.iFunction = 0,
 };
 
@@ -401,8 +401,8 @@ char serial_no[13];
 static char serial_no[9];
 #endif
 
-#define BOARD_IDENT "Black Magic Probe" PLATFORM_IDENT FIRMWARE_VERSION
-#define DFU_IDENT   "Black Magic Firmware Upgrade" PLATFORM_IDENT FIRMWARE_VERSION
+#define BOARD_IDENT "Black Magic Probe " PLATFORM_IDENT FIRMWARE_VERSION
+#define DFU_IDENT   "Black Magic Firmware Upgrade " PLATFORM_IDENT FIRMWARE_VERSION
 
 static const char *usb_strings[] = {
 	"Black Sphere Technologies",

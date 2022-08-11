@@ -21,3 +21,5 @@ blackmagic_upgrade
 .vscode
 cscope.out
 cscope.files
+.gdb_history
+src/artifacts/

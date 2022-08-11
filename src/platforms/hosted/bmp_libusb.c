@@ -1,7 +1,7 @@
 /*
  * This file is part of the Black Magic Debug project.
  *
- * Copyright (C) 2020 Uwe Bonnes (bon@elektron.ikp.physik.tu-darmstadt.de)
+ * Copyright(C) 2020 - 2021 Uwe Bonnes (bon@elektron.ikp.physik.tu-darmstadt.de)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -36,13 +36,15 @@
 
 #define VENDOR_ID_SEGGER         0x1366
 
+#define NO_SERIAL_NUMBER "<no serial number>"
+
 void bmp_ident(bmp_info_t *info)
 {
 	DEBUG_INFO("BMP hosted %s\n for ST-Link V2/3, CMSIS_DAP, JLINK and "
 			   "LIBFTDI/MPSSE\n", FIRMWARE_VERSION);
 	if (info && info->vid && info->pid)
 		DEBUG_INFO("Using %04x:%04x %s %s\n %s\n", info->vid, info->pid,
-				   info->serial,
+				   (info->serial[0]) ? info->serial : NO_SERIAL_NUMBER,
 				   info->manufacturer,
 				   info->product);
 }
@@ -147,22 +149,9 @@ int find_debuggers(BMP_CL_OPTIONS_t *cl_opts,bmp_info_t *info)
 		res = libusb_get_string_descriptor_ascii(
 			handle, desc.iManufacturer, (uint8_t*)manufacturer,
 			sizeof(manufacturer));
-		if (res > 0) {
-			res = libusb_get_string_descriptor_ascii(
-				handle, desc.iProduct, (uint8_t*)product,
-				sizeof(product));
-			if (res <= 0) {
-				DEBUG_WARN( "WARN:"
-						"libusb_get_string_descriptor_ascii "
-						"for ident_string failed: %s\n",
-						libusb_strerror(res));
-				libusb_close(handle);
-				continue;
-			}
-		} else {
-			libusb_close(handle);
-			continue;
-		}
+		res = libusb_get_string_descriptor_ascii(
+			handle, desc.iProduct, (uint8_t*)product,
+			sizeof(product));
 		libusb_close(handle);
 		if (cl_opts->opt_ident_string) {
 			char *match_manu = NULL;
@@ -233,11 +222,9 @@ int find_debuggers(BMP_CL_OPTIONS_t *cl_opts,bmp_info_t *info)
 			if (!cable->name)
 				continue;
 		}
-		if (!serial[0])
-			strcpy(serial, "<no serial number>");
 		if (report) {
 			DEBUG_WARN("%2d: %s, %s, %s\n", found_debuggers + 1,
-				   serial,
+					   (serial[0]) ? serial :  NO_SERIAL_NUMBER,
 				   manufacturer,product);
 		}
 		info->vid = desc.idVendor;

@@ -3,6 +3,8 @@
  *
  * Copyright (C) 2011  Black Sphere Technologies Ltd.
  * Written by Gareth McMullin <gareth@blacksphere.co.nz>
+ * Copyright (C) 2021 Uwe Bonnes
+ *                            (bon@elektron.ikp.physik.tu-darmstadt.de)
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +29,7 @@
 #include "command.h"
 #include "gdb_packet.h"
 #include "target.h"
+#include "target_internal.h"
 #include "morse.h"
 #include "version.h"
 #include "serialno.h"
@@ -36,13 +39,6 @@
 #endif
 
 typedef bool (*cmd_handler)(target *t, int argc, const char **argv);
-
-struct command_s {
-	const char *cmd;
-	cmd_handler handler;
-
-	const char *help;
-};
 
 static bool cmd_version(target *t, int argc, char **argv);
 static bool cmd_serial(target *t, int argc, char **argv);
@@ -179,10 +175,11 @@ bool cmd_help(target *t, int argc, char **argv)
 	(void)argv;
 	const struct command_s *c;
 
-	gdb_out("General commands:\n");
-	for(c = cmd_list; c->cmd; c++)
-		gdb_outf("\t%s -- %s\n", c->cmd, c->help);
-
+	if (!t || t->tc->destroy_callback) {
+		gdb_out("General commands:\n");
+		for(c = cmd_list; c->cmd; c++)
+			gdb_outf("\t%s -- %s\n", c->cmd, c->help);
+	}
 	if (!t)
 		return -1;
 
@@ -240,8 +237,9 @@ static bool cmd_jtag_scan(target *t, int argc, char **argv)
 bool cmd_swdp_scan(target *t, int argc, char **argv)
 {
 	(void)t;
-	(void)argc;
-	(void)argv;
+	volatile uint32_t targetid = 0;
+	if (argc > 1)
+		targetid  = strtol(argv[1], NULL, 0);
 	if (platform_target_voltage())
 		gdb_outf("Target voltage: %s\n", platform_target_voltage());
 
@@ -252,9 +250,9 @@ bool cmd_swdp_scan(target *t, int argc, char **argv)
 	volatile struct exception e;
 	TRY_CATCH (e, EXCEPTION_ALL) {
 #if PC_HOSTED == 1
-		devs = platform_adiv5_swdp_scan();
+		devs = platform_adiv5_swdp_scan(targetid);
 #else
-		devs = adiv5_swdp_scan();
+		devs = adiv5_swdp_scan(targetid);
 #endif
 		}
 	switch (e.type) {
