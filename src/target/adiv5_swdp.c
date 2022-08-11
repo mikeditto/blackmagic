@@ -67,6 +67,9 @@ bool firmware_dp_low_write(ADIv5_DP_t *dp, uint16_t addr, const uint32_t data)
  */
 int adiv5_swdp_scan(uint32_t targetid)
 {
+	static bool scan_multidrop = true;
+	uint32_t idcode = 0;
+	volatile uint32_t target_id;
 	ADIv5_DP_t idp = {
 		.dp_low_write = firmware_dp_low_write,
 		.error = firmware_swdp_error,
@@ -90,9 +93,6 @@ int adiv5_swdp_scan(uint32_t targetid)
 	 * 0x1a Arm CoreSight SW-DP activation sequence
 	 * 20 bits start of reset another reset sequence*/
 	initial_dp->seq_out(0x1a0, 12);
-	uint32_t idcode = 0;
-	volatile uint32_t target_id;
-	bool scan_multidrop = true;
 	if (!targetid || !initial_dp->dp_low_write) {
 		/* No targetID given on the command line or probe can not
 		 * handle multi-drop. Try to read ID */
