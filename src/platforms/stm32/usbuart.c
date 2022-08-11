@@ -118,8 +118,14 @@ void usbuart_init(void)
 	USBUSART_CR1 |= USART_CR1_IDLEIE;
 
 	/* Setup USART TX DMA */
+#if !defined(USBUSART_TDR) && defined(USBUSART_DR)
+# define USBUSART_TDR USBUSART_DR
+#endif
+#if !defined(USBUSART_RDR) && defined(USBUSART_DR)
+# define USBUSART_RDR USBUSART_DR
+#endif
 	dma_channel_reset(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN);
-	dma_set_peripheral_address(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN, (uint32_t)&USBUSART_DR);
+	dma_set_peripheral_address(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN, (uint32_t)&USBUSART_TDR);
 	dma_enable_memory_increment_mode(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN);
 	dma_set_peripheral_size(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN, DMA_PSIZE_8BIT);
 	dma_set_memory_size(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN, DMA_MSIZE_8BIT);
@@ -136,7 +142,7 @@ void usbuart_init(void)
 
 	/* Setup USART RX DMA */
 	dma_channel_reset(USBUSART_DMA_BUS, USBUSART_DMA_RX_CHAN);
-	dma_set_peripheral_address(USBUSART_DMA_BUS, USBUSART_DMA_RX_CHAN, (uint32_t)&USBUSART_DR);
+	dma_set_peripheral_address(USBUSART_DMA_BUS, USBUSART_DMA_RX_CHAN, (uint32_t)&USBUSART_RDR);
 	dma_set_memory_address(USBUSART_DMA_BUS, USBUSART_DMA_RX_CHAN, (uint32_t)buf_rx);
 	dma_set_number_of_data(USBUSART_DMA_BUS, USBUSART_DMA_RX_CHAN, RX_FIFO_SIZE);
 	dma_enable_memory_increment_mode(USBUSART_DMA_BUS, USBUSART_DMA_RX_CHAN);
@@ -393,8 +399,15 @@ void USBUSART_ISR(void)
 	usart_recv(USBUSART);
 
 	/* If line is now idle, then transmit a packet */
-	if (isIdle)
+	if (isIdle) {
+#if defined(USART_ICR)
+		USART_ICR(USBUSART) = USART_ICR_IDLECF;
+#else
+		/* On the older uarts, the sequence "read flags", "read DR"
+		 * as above cleared the flags */
+#endif
 		usbuart_run();
+	}
 
 	nvic_enable_irq(USBUSART_DMA_RX_IRQ);
 }

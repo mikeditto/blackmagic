@@ -201,9 +201,11 @@ int find_debuggers(BMP_CL_OPTIONS_t *cl_opts,bmp_info_t *info)
 		}
 		if (res < 0)
 			serial[0] = 0;
+		manufacturer[0] = 0;
 		res = libusb_get_string_descriptor_ascii(
 			handle, desc.iManufacturer, (uint8_t*)manufacturer,
 			sizeof(manufacturer));
+		product[0] = 0;
 		res = libusb_get_string_descriptor_ascii(
 			handle, desc.iProduct, (uint8_t*)product,
 			sizeof(product));
@@ -222,8 +224,9 @@ int find_debuggers(BMP_CL_OPTIONS_t *cl_opts,bmp_info_t *info)
 		if (desc.idVendor == VENDOR_ID_BMP) {
 			if (desc.idProduct == PRODUCT_ID_BMP) {
 				type = BMP_TYPE_BMP;
-			} else if (desc.idProduct == PRODUCT_ID_BMP_BL) {
-				DEBUG_WARN("BMP in botloader mode found. Restart or reflash!\n");
+			} else {
+				if (desc.idProduct == PRODUCT_ID_BMP_BL)
+					DEBUG_WARN("BMP in botloader mode found. Restart or reflash!\n");
 				continue;
 			}
 		} else if ((type = find_cmsis_dap_interface(dev, info)) != BMP_TYPE_NONE) {
@@ -252,13 +255,13 @@ int find_debuggers(BMP_CL_OPTIONS_t *cl_opts,bmp_info_t *info)
 				if ((cable->vendor != desc.idVendor) || (cable->product != desc.idProduct))
 					continue; /* VID/PID do not match*/
 				if (cl_opts->opt_cable) {
-					if (strcmp(cable->name, cl_opts->opt_cable))
+					if (strncmp(cable->name, cl_opts->opt_cable, strlen(cable->name)))
 						continue; /* cable names do not match*/
 					else
 						found = true;
 				}
 				if (cable->description) {
-					if (strcmp(cable->description, product))
+					if (strncmp(cable->description, product, strlen(cable->description)))
 						continue; /* discriptions do not match*/
 					else
 						found = true;

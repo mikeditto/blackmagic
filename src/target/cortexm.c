@@ -33,7 +33,6 @@
 #include "target.h"
 #include "target_internal.h"
 #include "cortexm.h"
-#include "platform.h"
 #include "command.h"
 #include "gdb_packet.h"
 
@@ -328,7 +327,7 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 		break;
 	default:
 		if (ap->ap_designer != AP_DESIGNER_ATMEL) /* Protected Atmel device?*/{
-			DEBUG_WARN("Unexpected CortexM CPUID partno %04x\n", cpuid_partno);
+			DEBUG_WARN("Unexpected CortexM CPUID partno %04" PRIx32 "\n", cpuid_partno);
 		}
 	}
 	DEBUG_INFO("CPUID 0x%08" PRIx32 " (%s var %" PRIx32 " rev %" PRIx32 ")\n",
@@ -441,6 +440,7 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 		if (ap->ap_partno == 0x4c0)  { /* Cortex-M0+ ROM */
 			if ((ap->dp->targetid & 0xfff) == AP_DESIGNER_RASPBERRY)
 				PROBE(rp_probe);
+			PROBE(lpc11xx_probe); /* LPC8 */
 		} else if (ap->ap_partno == 0x4c3)  { /* Cortex-M3 ROM */
 			PROBE(stm32f1_probe); /* Care for STM32F1 clones */
 			PROBE(lpc15xx_probe); /* Thanks to JojoS for testing */
