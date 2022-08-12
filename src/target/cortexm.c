@@ -378,8 +378,25 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 	} else {
 		target_check_error(t);
 	}
+#if PC_HOSTED
+#define STRINGIFY(x) #x
 #define PROBE(x) \
-	do { if ((x)(t)) {return true;} else target_check_error(t); } while (0)
+	do { \
+		DEBUG_INFO("Calling " STRINGIFY(x) "\n"); \
+		if ((x)(t)) \
+			return true; \
+		else \
+			target_check_error(t); \
+	} while (0)
+#else
+#define PROBE(x) \
+	do { \
+		if ((x)(t)) \
+			return true; \
+		else \
+			target_check_error(t); \
+	} while (0)
+#endif
 
 	switch (ap->ap_designer) {
 	case AP_DESIGNER_FREESCALE:
@@ -502,7 +519,7 @@ bool cortexm_attach(target *t)
 	priv->flash_patch_revision = (r >> 28);
 	priv->hw_watchpoint_max = CORTEXM_MAX_WATCHPOINTS;
 	r = target_mem_read32(t, CORTEXM_DWT_CTRL);
-	if ((r >> 28) > priv->hw_watchpoint_max)
+	if ((r >> 28) < priv->hw_watchpoint_max)
 		priv->hw_watchpoint_max = r >> 28;
 
 	/* Clear any stale breakpoints */
@@ -675,7 +692,7 @@ static int dcrsr_regnum(target *t, unsigned reg)
 		return regnum_cortex_m[reg];
 	} else if ((t->target_options & TOPT_FLAVOUR_V7MF) &&
 	           (reg < (sizeof(regnum_cortex_m) +
-	                   sizeof(regnum_cortex_mf) / 4))) {
+	                   sizeof(regnum_cortex_mf)) / 4)) {
 		return regnum_cortex_mf[reg - sizeof(regnum_cortex_m)/4];
 	} else {
 		return -1;
