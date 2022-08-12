@@ -9,7 +9,7 @@ Q := @
 endif
 
 CFLAGS += -Wall -Wextra -Werror -Wno-char-subscripts \
-	-std=gnu99 -g3 -MD -I./target \
+	-std=gnu99 -MD -I./target \
 	-I. -Iinclude -I$(PLATFORM_DIR)
 
 ifeq ($(ENABLE_DEBUG), 1)
@@ -90,7 +90,27 @@ VPATH += platforms/common
 CFLAGS += -Iplatforms/common
 endif
 
+ifeq ($(ENABLE_RTT), 1)
+CFLAGS += -DENABLE_RTT
+SRC += rtt.c rtt_if.c
+endif
+
+ifdef RTT_IDENT
+CFLAGS += -DRTT_IDENT=$(RTT_IDENT)
+endif
+
 OBJ = $(patsubst %.S,%.o,$(patsubst %.c,%.o,$(SRC)))
+
+OPTIMIZE := swdptap.o jtagtap.o \
+	    adiv5_jtagdp.o adiv5_swdp.o adiv5.o \
+	    cortexa.o cortexm.o \
+	    gdb_if.o gdb_main.o gdb_hostio.o gdb_packet.o \
+	    jtag_devs.o jtag_scan.o \
+	    crc32.o main.o \
+	    cdcacm.o jeff.o timing.o traceswo.o usbuart.o \
+
+$(OPTIMIZE)::        CFLAGS := $(filter-out -Os, $(CFLAGS))
+$(OPTIMIZE)::        CFLAGS += -O3
 
 $(TARGET): include/version.h $(OBJ)
 	@echo "  LD      $@"
@@ -114,7 +134,7 @@ ifndef PC_HOSTED
 	$(Q)$(OBJCOPY) -O ihex $^ $@
 endif
 
-.PHONY:	clean host_clean all_platforms FORCE
+.PHONY:	clean host_clean all_platforms clang-format FORCE
 
 clean:	host_clean
 	$(Q)echo "  CLEAN"
@@ -122,16 +142,27 @@ clean:	host_clean
 	-$(Q)$(RM) platforms/*/*.o platforms/*/*.d mapfile include/version.h
 
 all_platforms:
+	$(Q)if [ ! -f ../libopencm3/Makefile ]; then \
+		echo "Initialising git submodules..." ;\
+		git submodule init ;\
+		git submodule update ;\
+	fi
+	$(Q)$(MAKE) $(MFLAGS) -C ../libopencm3 lib/stm32/f1 lib/stm32/f4 lib/lm4f
 	$(Q)set -e ;\
 	mkdir -p artifacts/$(shell git describe --always --dirty --tags) ;\
 	echo "<html><body><ul>" > artifacts/index.html ;\
+	$(MAKE) clean ;\
 	for i in platforms/*/Makefile.inc ; do \
 		export DIRNAME=`dirname $$i` ;\
 		export PROBE_HOST=`basename $$DIRNAME` ;\
 		export CFLAGS=-Werror ;\
 		echo "Building for hardware platform: $$PROBE_HOST" ;\
-		$(MAKE) clean ;\
 		$(MAKE);\
+		if [ -f blackmagic ]; then \
+			mv blackmagic artifacts/blackmagic-$$PROBE_HOST ;\
+			echo "<li><a href='blackmagic-$$PROBE_HOST'>$$PROBE_HOST</a></li>"\
+				>> artifacts/index.html ;\
+		fi ;\
 		if [ -f blackmagic.bin ]; then \
 			mv blackmagic.bin artifacts/blackmagic-$$PROBE_HOST.bin ;\
 			echo "<li><a href='blackmagic-$$PROBE_HOST.bin'>$$PROBE_HOST</a></li>"\
@@ -142,13 +173,31 @@ all_platforms:
 			echo "<li><a href='blackmagic_dfu-$$PROBE_HOST.bin'>$$PROBE_HOST DFU</a></li>"\
 				>> artifacts/index.html ;\
 		fi ;\
+		$(MAKE) clean ;\
 	done ;\
 	echo "</ul></body></html>" >> artifacts/index.html ;\
-	cp artifacts/*.bin artifacts/$(shell git describe --always --dirty --tags)
+	cp artifacts/blackmagic* artifacts/$(shell git describe --always --dirty --tags)
 
 command.c: include/version.h
 
+GIT_VERSION := $(shell git describe --always --dirty --tags)
+VERSION_HEADER := \#define FIRMWARE_VERSION "$(GIT_VERSION)"
+
 include/version.h: FORCE
-	$(Q)echo " GIT include/version.h"
-	$(Q)echo "#define FIRMWARE_VERSION \"$(shell git describe --always --dirty --tags)\"" > $@
+	@# If git isn't found then GIT_VERSION will be an empty string.
+ifeq ($(GIT_VERSION),)
+	@echo Git not found, assuming up to date include/version.h
+else
+	@# Note that when we echo the version to the header file, echo writes a final newline
+	@# to the file. This is fine and probably makes the file more human-readable, but
+	@# also means we have to account for that newline in this comparison.
+	$(Q)if [ ! -f $@ ] || [ "$$(cat $@)" != "$$(echo '$(VERSION_HEADER)\n')" ]; then \
+		echo " GEN $@"; \
+		echo '$(VERSION_HEADER)' > $@; \
+	fi
+endif
+
+clang-format:
+	$(Q)clang-format -i *.c */*.c */*/*.c *.h */*.h */*/*.h
+
 -include *.d

@@ -17,9 +17,12 @@ ifndef NO_LIBOPENCM3
 		git submodule init ;\
 		git submodule update ;\
 	fi
-	$(Q)$(MAKE) $(MFLAGS) -C libopencm3 lib/stm32/f1 lib/stm32/f4 lib/lm4f
+	$(Q)$(MAKE) $(MFLAGS) -C libopencm3 lib/sam/d
 endif
 	$(Q)$(MAKE) $(MFLAGS) -C src
+
+all_platforms:
+	$(Q)$(MAKE) $(MFLAGS) -C src $@
 
 clean:
 ifndef NO_LIBOPENCM3
@@ -27,3 +30,10 @@ ifndef NO_LIBOPENCM3
 endif
 	$(Q)$(MAKE) $(MFLAGS) -C src $@
 
+clang-tidy:
+	$(Q)scripts/run-clang-tidy.py -s "$(PWD)"
+
+clang-format:
+	$(Q)$(MAKE) $(MFLAGS) -C src $@
+
+.PHONY: clean all_platforms clang-tidy clang-format

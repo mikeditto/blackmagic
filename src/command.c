@@ -39,7 +39,9 @@
 #endif
 
 static bool cmd_version(target *t, int argc, char **argv);
+#ifdef PLATFORM_HAS_PRINTSERIAL
 static bool cmd_serial(target *t, int argc, char **argv);
+#endif
 static bool cmd_help(target *t, int argc, char **argv);
 
 static bool cmd_jtag_scan(target *t, int argc, char **argv);
